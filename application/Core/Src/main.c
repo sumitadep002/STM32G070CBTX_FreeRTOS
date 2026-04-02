@@ -39,15 +39,16 @@
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
 #define MS2TICKS(ms) ((ms * osKernelGetTickFreq()) / 1000)
+#define EVT_GPIO_PRESSED 0x01
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart1;
 
 /* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-    .name = "defaultTask",
+osThreadId_t config_task_handle;
+const osThreadAttr_t config_task_attributes = {
+    .name = "config_task",
     .priority = (osPriority_t)osPriorityNormal,
     .stack_size = 128 * 4};
 /* USER CODE BEGIN PV */
@@ -58,7 +59,7 @@ const osThreadAttr_t defaultTask_attributes = {
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART1_UART_Init(void);
-void StartDefaultTask(void *argument);
+void config_task_handler(void *argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -124,7 +125,7 @@ int main(void)
 
   /* Create the thread(s) */
   /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  config_task_handle = osThreadNew(config_task_handler, NULL, &config_task_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -276,10 +277,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == CFG_SW_Pin)
   {
-    if (HAL_GPIO_ReadPin(CFG_SW_GPIO_Port, CFG_SW_Pin) == GPIO_PIN_RESET)
-    {
-      osThreadFlagsSet(config_task_handle, 0x01);
-    }
+    osThreadFlagsSet(config_task_handle, 0x01);
   }
   else
   {
@@ -296,7 +294,7 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
  * @retval None
  */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
+void config_task_handler(void *argument)
 {
   /* USER CODE BEGIN 5 */
   uint32_t flags;
@@ -304,8 +302,8 @@ void StartDefaultTask(void *argument)
   /* Infinite loop */
   for (;;)
   {
-    flags = osThreadFlagsWait(0xFFFFFFFF, osFlagsWaitAny, osWaitForever);
-    if (flags & 0x01)
+    flags = osThreadFlagsWait(EVT_GPIO_PRESSED, osFlagsWaitAny, osWaitForever);
+    if (flags & EVT_GPIO_PRESSED)
     {
       printf("Button Pressed!\r\n");
     }
