@@ -24,7 +24,18 @@ extern I2C_HandleTypeDef hi2c1;
 #define LCD_CTRL_DATA 0x40 // Control byte for sending text data
 
 // LCD Commands
-#define LCD_CMD_CLEAR_DISPLAY 0x01
+// --- Table 0: Standard Commands ---
+#define LCD_CMD_CLEAR 0x01       // Clear display (Needs 2ms delay)
+#define LCD_CMD_HOME 0x02        // Cursor home (Needs 2ms delay)
+#define LCD_CMD_ENTRY_MODE 0x06  // Cursor auto-increments to the right
+#define LCD_CMD_DISP_OFF 0x08    // Display OFF
+#define LCD_CMD_DISP_ON 0x0C     // Display ON, Cursor OFF, Blink OFF
+#define LCD_CMD_DISP_ON_CUR 0x0E // Display ON, Cursor ON, Blink OFF
+#define LCD_CMD_DISP_ON_BLK 0x0F // Display ON, Cursor ON, Blink ON
+
+// Cursor Positioning
+#define LCD_ROW_0 0x80
+#define LCD_ROW_1 0xC0
 
 // LCD Presence
 static uint8_t lcd_presence = 0;
@@ -33,18 +44,34 @@ static uint8_t lcd_presence = 0;
 static uint8_t lcd_scan();
 static uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t byte_data, uint8_t nibble_type);
 static uint8_t lcd_send_command(uint8_t cmd);
+static uint8_t lcd_send_data(uint8_t data);
+uint8_t lcd_print_string(const char *str);
 
 uint8_t lcd_init(void)
 {
+    printf("LCD-INIT\r\n");
     if (lcd_scan() != 0)
     {
         return 0xFF;
     }
 
+    HAL_Delay(10);
+
     lcd_presence = 1;
 
     lcd_send_command(0x38); // Set to 8 bit, 2 row configuration
-    lcd_clear();
+    // --- Standard Display Configuration ---
+    lcd_send_command(LCD_CMD_DISP_ON);    // Turn screen on
+    lcd_send_command(LCD_CMD_CLEAR);      // Clear memory
+    lcd_send_command(LCD_CMD_ENTRY_MODE); // Set text to print left-to-right
+    HAL_Delay(2);
+    // Move to Row 0, Column 2 (Center the text a bit)
+    lcd_send_command(LCD_ROW_0 + 2);
+    lcd_print_string("Hello World!");
+
+    // Move to Row 1, Column 0
+    lcd_send_command(LCD_ROW_1);
+    lcd_print_string("Native I2C Works");
 
     printf("LCD: Initialization complete\r\n");
 
@@ -101,7 +128,7 @@ uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t
 
 uint8_t lcd_clear(void)
 {
-    return lcd_send_command(LCD_CMD_CLEAR_DISPLAY);
+    return lcd_send_command(LCD_CMD_CLEAR);
 }
 
 /**
@@ -141,5 +168,27 @@ uint8_t lcd_send_data(uint8_t data)
     {
         return 0xFF;
     }
+    return 0;
+}
+
+uint8_t lcd_print_string(const char *str)
+{
+    uint8_t buffer[17];
+    uint8_t index = 0;
+
+    buffer[index++] = LCD_CTRL_DATA;
+
+    while (*str && index < sizeof(buffer))
+    {
+        // Notice the *str++ here! It grabs the letter AND moves to the next one.
+        buffer[index++] = (uint8_t)(*str++);
+    }
+
+    // Changed sizeof(buffer) to 'index' so we only send what we prepared
+    if (HAL_I2C_Master_Transmit(&hi2c1, I2C_ADDR, buffer, index, LCD_I2C_TIMEOUT_MS) != HAL_OK)
+    {
+        return 0xff;
+    }
+
     return 0;
 }

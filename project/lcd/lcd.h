@@ -15,5 +15,6 @@
 #define LCD_I2C_TIMEOUT_MS 1000
 
 uint8_t lcd_init(void);
+uint8_t lcd_clear(void);
 
 #endif /* LCD_H_ */
