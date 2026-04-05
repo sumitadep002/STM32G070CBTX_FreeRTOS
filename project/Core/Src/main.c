@@ -394,7 +394,6 @@ void config_task_handler(void *argument)
 
       // check if the button was released within expected time
       uint32_t input_time = MILLIS() - triggerred_time;
-      uint8_t data = 0;
 
       printf("Button was pressed for %lu ms\r\n", input_time);
 
