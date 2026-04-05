@@ -16,17 +16,32 @@
 // Externally defined I2C handle from main.c
 extern I2C_HandleTypeDef hi2c1;
 
+// LCD Local functions declarations
+static uint8_t lcd_scan();
+
 uint8_t lcd_init(void)
 {
     // Init I2C1 before calling this function
-    // Scan the bus for the LCD address (0x3E)
-    for (uint8_t add = 1; add < 128; add++)
+    // Scan the bus for the LCD
+    lcd_scan();
+
+    return 0;
+}
+
+uint8_t lcd_scan()
+{
+    // Check if device responds at this address
+    if (HAL_I2C_IsDeviceReady(&hi2c1, LCD_ADDRESS << 1, 1, 10) == HAL_OK)
     {
-        if (HAL_I2C_IsDeviceReady(&hi2c1, (add << 1), 1, 10) == HAL_OK)
-        {
-            printf("LCD Detected at 0x%02X\r\n", add);
-            return add;
-        }
+#if defined(LCD_LOG_ENABLE)
+        printf("LCD: Detected at 0x%02X\r\n", LCD_ADDRESS);
+        return 0;
+#endif
     }
-    return 0; // Return 0 if LCD is not found
+#if defined(LCD_LOG_ENABLE)
+    printf("LCD: Unable to detect at 0x%02X\r\n", LCD_ADDRESS);
+    return 0;
+#endif
+
+    return 0xff; // Return 0xFF if LCD is not found
 }
