@@ -400,18 +400,7 @@ void config_task_handler(void *argument)
 
       if (input_time < USER_INPUT_TIMEOUT_MS)
       {
-
-        printf("Scanning I2C bus...\r\n");
-
-        for (uint8_t add = 1; add < 128; add++)
-        {
-          if (HAL_I2C_IsDeviceReady(&hi2c1, (add << 1), 1, 10) == HAL_OK)
-          {
-            printf("Device found at 0x%02X\r\n", add);
-          }
-        }
-
-        printf("Scan complete\r\n");
+        printf("USER_INPUT_TIMEOUT_MS\r\n");
       }
       else if (input_time < USER_INPUT_TIME_MS_A)
       {
