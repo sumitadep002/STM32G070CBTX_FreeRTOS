@@ -19,6 +19,9 @@ extern I2C_HandleTypeDef hi2c1;
 // LCD Commands
 #define LCD_CMD_CLEAR_DISPLAY 0x01
 
+// LCD Presence
+static uint8_t lcd_presence = 0;
+
 // LCD Local functions declarations
 static uint8_t lcd_scan();
 static uint8_t lcd_kick_start(void);
@@ -31,6 +34,8 @@ uint8_t lcd_init(void)
     {
         return 0xFF;
     }
+
+    lcd_presence = 1;
 
     if (lcd_kick_start() != 0)
     {
