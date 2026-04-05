@@ -32,7 +32,7 @@ uint8_t lcd_init(void)
 uint8_t lcd_scan()
 {
     // Check if device responds at this address
-    if (HAL_I2C_IsDeviceReady(&hi2c1, LCD_ADDRESS << 1, 1, 10) == HAL_OK)
+    if (HAL_I2C_IsDeviceReady(&hi2c1, LCD_ADDRESS << 1, 1, LCD_I2C_TIMEOUT_MS) == HAL_OK)
     {
 #if defined(LCD_LOG_ENABLE)
         printf("LCD: Detected at 0x%02X\r\n", LCD_ADDRESS);

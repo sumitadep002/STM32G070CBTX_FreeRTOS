@@ -12,6 +12,7 @@
 
 #define LCD_LOG_ENABLE
 #define LCD_ADDRESS 0x3E
+#define LCD_I2C_TIMEOUT_MS 1000
 
 uint8_t lcd_init(void);
 
