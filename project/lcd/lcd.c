@@ -19,6 +19,7 @@ extern I2C_HandleTypeDef hi2c1;
 // LCD Local functions declarations
 static uint8_t lcd_scan();
 static uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t byte_data, uint8_t nibble_type);
+static uint8_t lcd_send_command(uint8_t cmd);
 
 uint8_t lcd_init(void)
 {
@@ -75,4 +76,45 @@ uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t
     byte |= nibble << 4;
 
     return byte;
+}
+
+/**
+ * @brief Send a command byte to the LCD
+ *
+ * @param cmd 8-bit command to send
+ *
+ * Sends the high nibble first, then low nibble, each with an EN pulse to latch.
+ */
+uint8_t lcd_send_command(uint8_t cmd)
+{
+    uint8_t i2c_byte;
+
+    // --- High nibble ---
+    i2c_byte = ldc_compose_byte(0, 0, 1, 1, cmd, 0); // RS=0 (command), EN=1
+    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
+    {
+        return 0xFF; // Return error if transmission fails
+    }
+
+    i2c_byte = ldc_compose_byte(0, 0, 0, 1, cmd, 0); // EN=0, latch
+    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
+    {
+        return 0xFF; // Return error if transmission fails
+    }
+
+    // --- Low nibble ---
+    i2c_byte = ldc_compose_byte(0, 0, 1, 1, cmd, 1); // EN=1, low nibble
+    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
+    {
+        return 0xFF; // Return error if transmission fails
+    }
+
+    i2c_byte = ldc_compose_byte(0, 0, 0, 1, cmd, 1); // EN=0, latch
+    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
+    {
+        return 0xFF; // Return error if transmission fails
+    }
+
+    HAL_Delay(2); // Give LCD time to process command
+    return 0;
 }
