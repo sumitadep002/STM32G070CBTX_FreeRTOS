@@ -96,30 +96,19 @@ uint8_t lcd_clear(void)
  */
 uint8_t lcd_send_command(uint8_t cmd)
 {
-    uint8_t i2c_byte;
+    uint8_t i2c_byte[4];
 
     // --- High nibble ---
-    i2c_byte = lcd_compose_byte(0, 0, 1, 1, cmd, 0); // RS=0 (command), EN=1
-    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
-    {
-        return 0xFF; // Return error if transmission fails
-    }
+    i2c_byte[0] = lcd_compose_byte(0, 0, 1, 1, cmd, 0); // RS=0 (command), EN=1
 
-    i2c_byte = lcd_compose_byte(0, 0, 0, 1, cmd, 0); // EN=0, latch
-    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
-    {
-        return 0xFF; // Return error if transmission fails
-    }
+    i2c_byte[1] = lcd_compose_byte(0, 0, 0, 1, cmd, 0); // EN=0, latch
 
     // --- Low nibble ---
-    i2c_byte = lcd_compose_byte(0, 0, 1, 1, cmd, 1); // EN=1, low nibble
-    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
-    {
-        return 0xFF; // Return error if transmission fails
-    }
+    i2c_byte[2] = lcd_compose_byte(0, 0, 1, 1, cmd, 1); // EN=1, low nibble
 
-    i2c_byte = lcd_compose_byte(0, 0, 0, 1, cmd, 1); // EN=0, latch
-    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
+    i2c_byte[3] = lcd_compose_byte(0, 0, 0, 1, cmd, 1); // EN=0, latch
+
+    if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, i2c_byte, 4, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
         return 0xFF; // Return error if transmission fails
     }
