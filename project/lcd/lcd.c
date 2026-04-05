@@ -16,6 +16,9 @@
 // Externally defined I2C handle from main.c
 extern I2C_HandleTypeDef hi2c1;
 
+// LCD Commands
+#define LCD_CMD_CLEAR_DISPLAY 0x01
+
 // LCD Local functions declarations
 static uint8_t lcd_scan();
 static uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t byte_data, uint8_t nibble_type);
@@ -26,6 +29,7 @@ uint8_t lcd_init(void)
     // Init I2C1 before calling this function
     // Scan the bus for the LCD
     lcd_scan();
+    lcd_clear();
 
     return 0;
 }
@@ -78,6 +82,11 @@ uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t
     return byte;
 }
 
+uint8_t lcd_clear(void)
+{
+    return lcd_send_command(LCD_CMD_CLEAR_DISPLAY);
+}
+
 /**
  * @brief Send a command byte to the LCD
  *
@@ -90,26 +99,26 @@ uint8_t lcd_send_command(uint8_t cmd)
     uint8_t i2c_byte;
 
     // --- High nibble ---
-    i2c_byte = ldc_compose_byte(0, 0, 1, 1, cmd, 0); // RS=0 (command), EN=1
+    i2c_byte = lcd_compose_byte(0, 0, 1, 1, cmd, 0); // RS=0 (command), EN=1
     if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
         return 0xFF; // Return error if transmission fails
     }
 
-    i2c_byte = ldc_compose_byte(0, 0, 0, 1, cmd, 0); // EN=0, latch
+    i2c_byte = lcd_compose_byte(0, 0, 0, 1, cmd, 0); // EN=0, latch
     if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
         return 0xFF; // Return error if transmission fails
     }
 
     // --- Low nibble ---
-    i2c_byte = ldc_compose_byte(0, 0, 1, 1, cmd, 1); // EN=1, low nibble
+    i2c_byte = lcd_compose_byte(0, 0, 1, 1, cmd, 1); // EN=1, low nibble
     if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
         return 0xFF; // Return error if transmission fails
     }
 
-    i2c_byte = ldc_compose_byte(0, 0, 0, 1, cmd, 1); // EN=0, latch
+    i2c_byte = lcd_compose_byte(0, 0, 0, 1, cmd, 1); // EN=0, latch
     if (HAL_I2C_Master_Transmit(&hi2c1, LCD_ADDRESS << 1, &i2c_byte, 1, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
         return 0xFF; // Return error if transmission fails
