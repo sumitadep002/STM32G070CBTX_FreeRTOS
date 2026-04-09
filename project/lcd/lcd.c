@@ -6,7 +6,8 @@
  */
 
 // Standard hedaer files
-#include "stdio.h"
+#include <stdio.h>
+#include <string.h>
 
 // Project header files
 #include "main.h"
@@ -64,13 +65,6 @@ uint8_t lcd_init(void)
     lcd_send_command(LCD_CMD_DISP_ON);    // Turn screen on
     lcd_send_command(LCD_CMD_ENTRY_MODE); // Set text to print left-to-right
     lcd_clear();                          // Clear memory
-    // Move to Row 0, Column 2 (Center the text a bit)
-    lcd_send_command(LCD_ROW_0 + 2);
-    lcd_print_string("Hello World!");
-
-    // Move to Row 1, Column 0
-    lcd_send_command(LCD_ROW_1);
-    lcd_print_string("Native I2C Works");
 
     printf("LCD: Initialization complete\r\n");
 
@@ -191,6 +185,43 @@ uint8_t lcd_print_string(const char *str)
     if (HAL_I2C_Master_Transmit(&hi2c1, I2C_ADDR, buffer, index, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
         return 0xff;
+    }
+
+    return 0;
+}
+
+uint8_t lcd_msg_left(const char *str1, const char *str2)
+{
+    if (str1 == NULL || str2 == NULL || strlen(str1) > 16 || strlen(str2) > 16)
+    {
+        return 0xff;
+    }
+
+    if (lcd_clear() != 0)
+    {
+        return 0xfe;
+    }
+
+    // Move to Row 0, Column 2 (Center the text a bit)
+    if (lcd_send_command(LCD_ROW_0) != 0)
+    {
+        return 0xfd;
+    }
+
+    if (lcd_print_string(str1) != 0)
+    {
+        return 0xfc;
+    }
+
+    // Move to Row 1, Column 0
+    if (lcd_send_command(LCD_ROW_1) != 0)
+    {
+        return 0xfb;
+    }
+
+    if (lcd_print_string(str2) != 0)
+    {
+        return 0xfa;
     }
 
     return 0;

@@ -16,5 +16,6 @@
 
 uint8_t lcd_init(void);
 uint8_t lcd_clear(void);
+uint8_t lcd_msg_left(const char *str1, const char *str2);
 
 #endif /* LCD_H_ */
