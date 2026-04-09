@@ -1,17 +1,16 @@
 /*
  * lcd.c
  *
- *  Created on: Apr 5, 2026
- *      Author: sumit
+ * Created on: Apr 5, 2026
+ * Author: sumit
  */
 
-// Standard hedaer files
+// Standard header files
 #include <stdio.h>
 #include <string.h>
 
 // Project header files
 #include "main.h"
-
 #include "lcd.h"
 
 // Externally defined I2C handle from main.c
@@ -38,6 +37,13 @@ extern I2C_HandleTypeDef hi2c1;
 #define LCD_ROW_0 0x80
 #define LCD_ROW_1 0xC0
 
+// --- Error Logging Macro ---
+#if defined(LCD_LOG_ENABLE)
+#define LCD_LOG_ERR(...) printf("LCD [ERR]: " __VA_ARGS__)
+#else
+#define LCD_LOG_ERR(...)
+#endif
+
 // LCD Presence
 static uint8_t lcd_presence = 0;
 
@@ -50,9 +56,9 @@ uint8_t lcd_print_string(const char *str);
 
 uint8_t lcd_init(void)
 {
-    printf("LCD-INIT\r\n");
     if (lcd_scan() != 0)
     {
+        LCD_LOG_ERR("Initialization failed - device not found\r\n");
         return 0xFF;
     }
 
@@ -66,8 +72,6 @@ uint8_t lcd_init(void)
     lcd_send_command(LCD_CMD_ENTRY_MODE); // Set text to print left-to-right
     lcd_clear();                          // Clear memory
 
-    printf("LCD: Initialization complete\r\n");
-
     return 0;
 }
 
@@ -76,29 +80,15 @@ uint8_t lcd_scan()
     // Check if device responds at this address
     if (HAL_I2C_IsDeviceReady(&hi2c1, I2C_ADDR, 1, LCD_I2C_TIMEOUT_MS) == HAL_OK)
     {
-#if defined(LCD_LOG_ENABLE)
-        printf("LCD: Detected at 0x%02X\r\n", LCD_ADDRESS);
         return 0;
-#endif
     }
-#if defined(LCD_LOG_ENABLE)
-    printf("LCD: Unable to detect at 0x%02X\r\n", LCD_ADDRESS);
-    return 0;
-#endif
 
+    LCD_LOG_ERR("Unable to detect at 0x%02X\r\n", LCD_ADDRESS);
     return 0xff; // Return 0xFF if LCD is not found
 }
 
 /**
  * @brief Compose a byte to send to I2C LCD via PCF8574
- *
- * @param rs          RS bit (0=command, 1=data)
- * @param rw          RW bit (0=write, 1=read)
- * @param en          EN bit (0=low, 1=high for pulse)
- * @param bl          Backlight bit (0=off, 1=on)
- * @param byte_data   Full byte to send (command or data)
- * @param nibble_type 0=high nibble, 1=low nibble
- * @return uint8_t Byte to send over I2C
  */
 uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t byte_data, uint8_t nibble_type)
 {
@@ -130,10 +120,6 @@ uint8_t lcd_clear(void)
 
 /**
  * @brief Send a command byte to the LCD
- *
- * @param cmd 8-bit command to send
- *
- * Sends the high nibble first, then low nibble, each with an EN pulse to latch.
  */
 uint8_t lcd_send_command(uint8_t cmd)
 {
@@ -143,6 +129,7 @@ uint8_t lcd_send_command(uint8_t cmd)
 
     if (HAL_I2C_Master_Transmit(&hi2c1, I2C_ADDR, buffer, sizeof(buffer), LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
+        LCD_LOG_ERR("I2C Transmit Error (CMD 0x%02X)\r\n", cmd);
         return 0xFF;
     }
     return 0;
@@ -150,19 +137,16 @@ uint8_t lcd_send_command(uint8_t cmd)
 
 /**
  * @brief Send a data byte to the LCD
- *
- * @param data 8-bit data to send
- *
- * Sends the high nibble first, then low nibble, each with an EN pulse to latch.
  */
 uint8_t lcd_send_data(uint8_t data)
 {
     uint8_t buffer[2];
-    buffer[0] = LCD_CTRL_DATA; // Control byte: RS =
+    buffer[0] = LCD_CTRL_DATA; // Control byte: RS = 1
     buffer[1] = data;          // The actual Data
 
     if (HAL_I2C_Master_Transmit(&hi2c1, I2C_ADDR, buffer, sizeof(buffer), LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
+        LCD_LOG_ERR("I2C Transmit Error (DATA 0x%02X)\r\n", data);
         return 0xFF;
     }
     return 0;
@@ -177,13 +161,12 @@ uint8_t lcd_print_string(const char *str)
 
     while (*str && index < sizeof(buffer))
     {
-        // Notice the *str++ here! It grabs the letter AND moves to the next one.
         buffer[index++] = (uint8_t)(*str++);
     }
 
-    // Changed sizeof(buffer) to 'index' so we only send what we prepared
     if (HAL_I2C_Master_Transmit(&hi2c1, I2C_ADDR, buffer, index, LCD_I2C_TIMEOUT_MS) != HAL_OK)
     {
+        LCD_LOG_ERR("I2C Transmit Error (STRING)\r\n");
         return 0xff;
     }
 
@@ -194,6 +177,7 @@ uint8_t lcd_msg_left(const char *str1, const char *str2)
 {
     if (str1 == NULL || str2 == NULL || strlen(str1) > 16 || strlen(str2) > 16)
     {
+        LCD_LOG_ERR("Msg Left Error - Invalid string lengths or NULL pointers\r\n");
         return 0xff;
     }
 
@@ -202,7 +186,6 @@ uint8_t lcd_msg_left(const char *str1, const char *str2)
         return 0xfe;
     }
 
-    // Move to Row 0, Column 2 (Center the text a bit)
     if (lcd_send_command(LCD_ROW_0) != 0)
     {
         return 0xfd;
@@ -213,7 +196,6 @@ uint8_t lcd_msg_left(const char *str1, const char *str2)
         return 0xfc;
     }
 
-    // Move to Row 1, Column 0
     if (lcd_send_command(LCD_ROW_1) != 0)
     {
         return 0xfb;
@@ -231,6 +213,7 @@ uint8_t lcd_msg_middle(const char *str1, const char *str2)
 {
     if (str1 == NULL || str2 == NULL || strlen(str1) > 16 || strlen(str2) > 16)
     {
+        LCD_LOG_ERR("Msg Middle Error - Invalid string lengths or NULL pointers\r\n");
         return 0xff;
     }
 
@@ -239,7 +222,6 @@ uint8_t lcd_msg_middle(const char *str1, const char *str2)
         return 0xfe;
     }
 
-    // Move to Row 0, Column 2 (Center the text a bit)
     if (lcd_send_command(LCD_ROW_0 + (16 - strlen(str1)) / 2) != 0)
     {
         return 0xfd;
@@ -250,7 +232,6 @@ uint8_t lcd_msg_middle(const char *str1, const char *str2)
         return 0xfc;
     }
 
-    // Move to Row 1, Column 0
     if (lcd_send_command(LCD_ROW_1 + (16 - strlen(str2)) / 2) != 0)
     {
         return 0xfb;
