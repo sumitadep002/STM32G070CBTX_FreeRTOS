@@ -62,9 +62,8 @@ uint8_t lcd_init(void)
     lcd_send_command(0x38); // Set to 8 bit, 2 row configuration
     // --- Standard Display Configuration ---
     lcd_send_command(LCD_CMD_DISP_ON);    // Turn screen on
-    lcd_send_command(LCD_CMD_CLEAR);      // Clear memory
     lcd_send_command(LCD_CMD_ENTRY_MODE); // Set text to print left-to-right
-    HAL_Delay(2);
+    lcd_clear();                          // Clear memory
     // Move to Row 0, Column 2 (Center the text a bit)
     lcd_send_command(LCD_ROW_0 + 2);
     lcd_print_string("Hello World!");
@@ -128,7 +127,11 @@ uint8_t lcd_compose_byte(uint8_t rs, uint8_t rw, uint8_t en, uint8_t bl, uint8_t
 
 uint8_t lcd_clear(void)
 {
-    return lcd_send_command(LCD_CMD_CLEAR);
+    uint8_t status = lcd_send_command(LCD_CMD_CLEAR);
+
+    HAL_Delay(2); // This shall not be removed
+
+    return status;
 }
 
 /**
