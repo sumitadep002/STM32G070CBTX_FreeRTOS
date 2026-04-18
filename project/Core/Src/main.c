@@ -384,13 +384,13 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : LORA_INT_Pin */
   GPIO_InitStruct.Pin = LORA_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(LORA_INT_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LORA_BSY_Pin */
   GPIO_InitStruct.Pin = LORA_BSY_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(LORA_BSY_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -426,13 +426,14 @@ void user_btn_callback(uint32_t timeout_ms)
 
   printf("Button callback triggered: %lu ms\r\n", timeout_ms);
 
-  if (timeout_ms < 1000)
+  if (timeout_ms >= 1000)
   {
-    snprintf(str1, sizeof(str1), "Short Press");
+    snprintf(str1, sizeof(str1), "LoRa Transmit");
+    lora_transmit((uint8_t *)"Hello World", 11, 5000);
   }
   else
   {
-    snprintf(str1, sizeof(str1), "Long Press");
+    snprintf(str1, sizeof(str1), "Short Press");
   }
 
   snprintf(str2, sizeof(str2), "Time: %lu ms", timeout_ms);
