@@ -5,6 +5,7 @@
 
 #include "lora.h"
 #include "lora_config.h"
+#include "sx126x_driver-2.5.0/src/sx126x.h"
 #include "sx126x_hal.h"
 #include <stdio.h>
 
@@ -190,7 +191,7 @@ bool lora_transmit(uint8_t *data, uint16_t length, uint32_t timeout) {
   sx126x_set_standby(NULL, LORA_STANDBY_MODE);
   sx126x_set_buffer_base_address(NULL, 0, 0);
   sx126x_write_buffer(NULL, 0, data, (uint8_t)length);
-  sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
+  sx126x_clear_irq_status(NULL, SX126X_IRQ_TX_DONE | SX126X_IRQ_TIMEOUT);
   sx126x_set_dio_irq_params(NULL, SX126X_IRQ_TX_DONE | SX126X_IRQ_TIMEOUT,
                             SX126X_IRQ_TX_DONE | SX126X_IRQ_TIMEOUT,
                             SX126X_IRQ_NONE, SX126X_IRQ_NONE);
@@ -208,17 +209,11 @@ bool lora_transmit(uint8_t *data, uint16_t length, uint32_t timeout) {
 void lora_start_rx(uint32_t timeout) {
   sx126x_set_standby(NULL, LORA_STANDBY_MODE);
   sx126x_set_buffer_base_address(NULL, 0, 0);
-  sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
+  sx126x_clear_irq_status(NULL, SX126X_IRQ_TX_DONE | SX126X_IRQ_TIMEOUT);
 
-  sx126x_set_dio_irq_params(
-      NULL,
-      SX126X_IRQ_RX_DONE | SX126X_IRQ_CRC_ERROR | SX126X_IRQ_TIMEOUT |
-          SX126X_IRQ_HEADER_VALID | SX126X_IRQ_HEADER_ERROR |
-          SX126X_IRQ_PREAMBLE_DETECTED | SX126X_IRQ_SYNC_WORD_VALID,
-      SX126X_IRQ_RX_DONE | SX126X_IRQ_CRC_ERROR | SX126X_IRQ_TIMEOUT |
-          SX126X_IRQ_HEADER_VALID | SX126X_IRQ_HEADER_ERROR |
-          SX126X_IRQ_PREAMBLE_DETECTED | SX126X_IRQ_SYNC_WORD_VALID,
-      SX126X_IRQ_NONE, SX126X_IRQ_NONE);
+  sx126x_set_dio_irq_params(NULL, SX126X_IRQ_RX_DONE | SX126X_IRQ_TIMEOUT,
+                            SX126X_IRQ_RX_DONE | SX126X_IRQ_TIMEOUT,
+                            SX126X_IRQ_NONE, SX126X_IRQ_NONE);
   sx126x_set_rx(NULL, timeout);
 }
 
@@ -228,8 +223,6 @@ static bool misc_sx126x_is_rx_mode(void) {
 
   return (radio_status.chip_mode == SX126X_CHIP_MODE_RX);
 }
-
-
 
 void lora_handle_interrupt(void) {
   if (lora_task_handle != NULL) {
@@ -248,7 +241,7 @@ static void lora_task_handler(void *argument) {
     if (flags & LORA_EVT_IRQ) {
       sx126x_irq_mask_t irq_status;
       if (sx126x_get_irq_status(NULL, &irq_status) == SX126X_STATUS_OK) {
-        sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
+        sx126x_clear_irq_status(NULL, irq_status);
 
         if (irq_status & SX126X_IRQ_TX_DONE) {
           LORA_LOG_INFO("TX DONE\r\n");
