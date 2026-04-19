@@ -30,17 +30,29 @@ static const osThreadAttr_t lora_task_attributes = {
  */
 
 static void lora_task_handler(void *argument);
-static void lora_task_init(void);
+static bool lora_hw_init(void);
 static bool misc_sx126x_is_rx_mode(void);
 
 /* --- PUBLIC FUNCTIONS DEFINITIONS --------------------------------------------
  */
 
 bool lora_init(lora_rx_cb_t rx_cb) {
+  lora_rx_callback = rx_cb;
+
+  lora_task_handle =
+      osThreadNew(lora_task_handler, NULL, &lora_task_attributes);
+  if (lora_task_handle == NULL) {
+    LORA_LOG_ERR("Failed to create LoRa task\r\n");
+    return false;
+  }
+
+  LORA_LOG_INFO("LoRa task created successfully\r\n");
+  return true;
+}
+
+static bool lora_hw_init(void) {
   sx126x_status_t modem_status;
   sx126x_hal_status_t hal_status;
-
-  lora_rx_callback = rx_cb;
 
   /* Initialize Hardware Abstraction Layer */
   hal_status = sx126x_hal_init(NULL);
@@ -49,9 +61,6 @@ bool lora_init(lora_rx_cb_t rx_cb) {
     return false;
   }
 
-  /* Hardware already reset and woken up in sx126x_hal_init,
-     but we can call them again to be sure if following user template strictly
-   */
   hal_status = sx126x_hal_reset(NULL);
   if (hal_status != SX126X_HAL_STATUS_OK) {
     LORA_LOG_ERR("SX126X-HAL-RST failed\r\n");
@@ -164,7 +173,6 @@ bool lora_init(lora_rx_cb_t rx_cb) {
   LORA_LOG_INFO("LoRa started in RX mode\r\n");
 #endif
 
-  lora_task_init();
   return true;
 }
 
@@ -221,15 +229,7 @@ static bool misc_sx126x_is_rx_mode(void) {
   return (radio_status.chip_mode == SX126X_CHIP_MODE_RX);
 }
 
-static void lora_task_init(void) {
-  lora_task_handle =
-      osThreadNew(lora_task_handler, NULL, &lora_task_attributes);
-  if (lora_task_handle == NULL) {
-    LORA_LOG_ERR("Failed to create LoRa task\r\n");
-  } else {
-    LORA_LOG_INFO("LoRa task created successfully\r\n");
-  }
-}
+
 
 void lora_handle_interrupt(void) {
   if (lora_task_handle != NULL) {
@@ -239,6 +239,10 @@ void lora_handle_interrupt(void) {
 
 static void lora_task_handler(void *argument) {
   uint32_t flags;
+
+  /* Initialize Radio Hardware in the context of the task */
+  lora_hw_init();
+
   for (;;) {
     flags = osThreadFlagsWait(LORA_EVT_IRQ, osFlagsWaitAny, osWaitForever);
     if (flags & LORA_EVT_IRQ) {
