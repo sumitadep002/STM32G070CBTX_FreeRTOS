@@ -431,7 +431,7 @@ void user_btn_callback(uint32_t timeout_ms) {
 
   snprintf(str2, sizeof(str2), "Time: %lu ms", timeout_ms);
 
-  // lcd_enqueue_msg(str1, str2);
+  lcd_enqueue_msg(str1, str2);
 }
 
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
@@ -463,7 +463,7 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
   snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
 #endif
 
-  // lcd_enqueue_msg(str1, str2);
+  lcd_enqueue_msg(str1, str2);
 }
 
 void app_task(void *argument) {
@@ -478,7 +478,7 @@ void app_task(void *argument) {
     tx_count++;
     snprintf(str1, sizeof(str1), "TX Pkt: %lu", tx_count);
     snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
-    // lcd_enqueue_msg(str1, str2);
+    lcd_enqueue_msg(str1, str2);
 
     LORA_LOG_INFO("Transmitting packet %lu/%d\r\n", tx_count,
                   LORA_TOTAL_PACKETS);
@@ -493,7 +493,7 @@ void app_task(void *argument) {
   }
 
   LORA_LOG_INFO("App Task: TX Test Completed\r\n");
-  // lcd_enqueue_msg("TX Test", "Completed");
+  lcd_enqueue_msg("TX Test", "Completed");
 
 #else
   LORA_LOG_INFO("App Task: RX Mode Started\r\n");
