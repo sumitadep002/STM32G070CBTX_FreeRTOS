@@ -52,7 +52,7 @@ extern "C"
 
 /* LoRa Modulation Configuration -------------------------------------------------*/
 #define LORA_MOD_PARAMS_BW SX126X_LORA_BW_125 // Bandwidth
-#define LORA_MOD_PARAMS_SF SX126X_LORA_SF8    // Spreading Factor
+#define LORA_MOD_PARAMS_SF SX126X_LORA_SF7    // Spreading Factor
 #define LORA_MOD_PARAMS_CR SX126X_LORA_CR_4_8 // Coding Rate
 #define LORA_MOD_PARAMS_LDRO 0                // Low Data Rate Optimization
 
