@@ -506,6 +506,9 @@ void app_task(void *argument) {
     osDelay(50);
     lora_transmit((uint8_t *)"ACK", 3, LORA_TX_TIMEOUT);
 
+    /* Re-arm RX to listen for next PING */
+    lora_start_rx(LORA_RX_TIMEOUT);
+
     snprintf(str1, sizeof(str1), "RX Pkt: %lu", rx_count);
     snprintf(str2, sizeof(str2), "TX Ack: %lu", tx_count);
     lcd_enqueue_msg(str1, str2);
