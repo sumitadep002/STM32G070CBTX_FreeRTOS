@@ -130,6 +130,7 @@ sx126x_hal_status_t sx126x_hal_init(const void *context) {
 sx126x_hal_status_t
 sx126x_hal_set_rf_switch_mode(const void *context,
                               sx126x_hal_rf_switch_mode_t mode) {
+#if 0
   if (mode == SX126X_HAL_RF_SWITCH_TX) {
     HAL_GPIO_WritePin(LORA_TXEN_GPIO_Port, LORA_TXEN_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(LORA_RXEN_GPIO_Port, LORA_RXEN_Pin, GPIO_PIN_RESET);
@@ -137,13 +138,15 @@ sx126x_hal_set_rf_switch_mode(const void *context,
     HAL_GPIO_WritePin(LORA_TXEN_GPIO_Port, LORA_TXEN_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(LORA_RXEN_GPIO_Port, LORA_RXEN_Pin, GPIO_PIN_SET);
   }
+#endif
 
   return SX126X_HAL_STATUS_OK;
 }
 
 /*
  * -----------------------------------------------------------------------------
- * --- PRIVATE FUNCTIONS DEFINITIONS -------------------------------------------
+ * --- PRIVATE FUNCTIONS DEFINITIONS
+ * -------------------------------------------
  */
 
 static uint8_t sx126x_hal_bsy(void) {
@@ -170,4 +173,5 @@ static uint8_t sx126x_hal_bsy(void) {
   return 1; // Successfully low (Ready)
 }
 
-/* --- EOF ------------------------------------------------------------------ */
+/* --- EOF ------------------------------------------------------------------
+ */

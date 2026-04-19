@@ -88,22 +88,6 @@ bool lora_init(lora_rx_cb_t rx_cb) {
     LORA_LOG_ERR("SX126X-SET-PA failed\r\n");
     return false;
   }
-#if 0
-    /* TCXO Configuration */
-    modem_status = sx126x_set_dio3_as_tcxo_ctrl(NULL, LORA_TCXO_CTRL_VOLTAGE, LORA_TCXO_CTRL_DELAY);
-    if (modem_status != SX126X_STATUS_OK)
-    {
-        LORA_LOG_ERR("SX126X-SET-DIO3-AS-TCXO failed\r\n");
-        return false;
-    }
-#endif
-
-  /* RF Switch Configuration via DIO2 */
-  modem_status = sx126x_set_dio2_as_rf_sw_ctrl(NULL, LORA_DIO2_RF_SW_CTRL);
-  if (modem_status != SX126X_STATUS_OK) {
-    LORA_LOG_ERR("SX126X-SET-DIO2-AS-RF-SWITCH failed\r\n");
-    return false;
-  }
   /* Packet and Frequency configuration */
   modem_status = sx126x_set_pkt_type(NULL, LORA_PKT_TYPE);
   if (modem_status != SX126X_STATUS_OK) {
@@ -175,9 +159,6 @@ bool lora_init(lora_rx_cb_t rx_cb) {
 
   LORA_LOG_INFO("LoRa Initialization successful\r\n");
 
-  /* Default pin state: RX Mode */
-  sx126x_hal_set_rf_switch_mode(NULL, SX126X_HAL_RF_SWITCH_RX);
-
 #if (LORA_BOARD_MODE == LORA_MODE_RX)
   lora_start_rx(LORA_RX_TIMEOUT);
   LORA_LOG_INFO("LoRa started in RX mode\r\n");
@@ -189,9 +170,6 @@ bool lora_init(lora_rx_cb_t rx_cb) {
 
 bool lora_transmit(uint8_t *data, uint16_t length, uint32_t timeout) {
   gf_tx_done = false;
-
-  /* Enable TX path */
-  sx126x_hal_set_rf_switch_mode(NULL, SX126X_HAL_RF_SWITCH_TX);
 
   sx126x_pkt_params_lora_t sx126x_pkt_params_lora = {
       .preamble_len_in_symb = LORA_PKT_PARAMS_PREAMBLE_LEN_IN_SYMB,
@@ -216,16 +194,10 @@ bool lora_transmit(uint8_t *data, uint16_t length, uint32_t timeout) {
     osDelay(1);
   }
 
-  /* Return to RX path */
-  sx126x_hal_set_rf_switch_mode(NULL, SX126X_HAL_RF_SWITCH_RX);
-
   return gf_tx_done;
 }
 
 void lora_start_rx(uint32_t timeout) {
-  /* Enable RX path */
-  sx126x_hal_set_rf_switch_mode(NULL, SX126X_HAL_RF_SWITCH_RX);
-
   sx126x_set_standby(NULL, LORA_STANDBY_MODE);
   sx126x_set_buffer_base_address(NULL, 0, 0);
   sx126x_clear_irq_status(NULL, SX126X_IRQ_ALL);
