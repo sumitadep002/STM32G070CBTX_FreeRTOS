@@ -28,6 +28,12 @@ extern "C" {
 #define LORA_LOG_FAIL(...)
 #endif
 
+#define LORA_MODE_TX 0
+#define LORA_MODE_RX 1
+
+/* Set the board mode here: LORA_MODE_TX or LORA_MODE_RX */
+#define LORA_BOARD_MODE LORA_MODE_RX
+
 /* --- PUBLIC TYPES ------------------------------------------------------------ */
 
 /**
@@ -46,6 +52,7 @@ typedef void (*lora_rx_cb_t)(uint8_t *data, uint16_t len, int16_t rssi, int8_t s
 bool lora_init(lora_rx_cb_t rx_cb);
 void lora_handle_interrupt(void);
 bool lora_transmit(uint8_t *data, uint16_t length, uint32_t timeout);
+void lora_start_rx(uint32_t timeout);
 
 
 
