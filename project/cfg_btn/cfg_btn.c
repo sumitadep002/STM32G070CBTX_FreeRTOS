@@ -1,10 +1,8 @@
 #include "cfg_btn.h"
 #include "cmsis_os.h"
 #include "main.h" // For CFG_SW_Pin, CFG_SW_GPIO_Port
+#include "common.h"
 #include <stdio.h>
-
-#define MS2TICKS(ms) ((ms * osKernelGetTickFreq()) / 1000)
-#define MILLIS() osKernelGetTickCount()
 
 #define EVT_GPIO_PRESSED 0x01
 

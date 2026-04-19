@@ -27,7 +27,9 @@
 
 #include "../../cfg_btn/cfg_btn.h"
 #include "../../lcd/lcd.h"
+#include "../../lora/lora.h"
 /* USER CODE END Includes */
+
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
@@ -63,6 +65,7 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 void user_btn_callback(uint32_t timeout_ms);
+void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi, int8_t snr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -128,7 +131,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_THREADS */
   cfg_btn_init(user_btn_callback);
   lcd_init();
+  lora_init(user_lora_rx_callback);
   /* USER CODE END RTOS_THREADS */
+
+
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
@@ -344,14 +350,29 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GATED_5V_Pin|CHIP_SELECT_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, LORA_TXEN_Pin|LORA_RXEN_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : GATED_5V_Pin CHIP_SELECT_Pin */
-  GPIO_InitStruct.Pin = GATED_5V_Pin|CHIP_SELECT_Pin;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GATED_5V_Pin|LORA_NSS_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(LORA_RST_GPIO_Port, LORA_RST_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : LORA_TXEN_Pin LORA_RXEN_Pin */
+  GPIO_InitStruct.Pin = LORA_TXEN_Pin|LORA_RXEN_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : GATED_5V_Pin LORA_NSS_Pin */
+  GPIO_InitStruct.Pin = GATED_5V_Pin|LORA_NSS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -363,7 +384,29 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(CFG_SW_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : LORA_RST_Pin */
+  GPIO_InitStruct.Pin = LORA_RST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LORA_RST_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LORA_INT_Pin */
+  GPIO_InitStruct.Pin = LORA_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(LORA_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LORA_BSY_Pin */
+  GPIO_InitStruct.Pin = LORA_BSY_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(LORA_BSY_GPIO_Port, &GPIO_InitStruct);
+
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
+
   HAL_NVIC_SetPriority(EXTI4_15_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 
@@ -393,13 +436,18 @@ void user_btn_callback(uint32_t timeout_ms)
 
   printf("Button callback triggered: %lu ms\r\n", timeout_ms);
 
-  if (timeout_ms < 1000)
+  if (timeout_ms >= 1000)
   {
-    snprintf(str1, sizeof(str1), "Short Press");
+#if (LORA_BOARD_MODE == LORA_MODE_TX)
+    snprintf(str1, sizeof(str1), "LoRa Transmit");
+    lora_transmit((uint8_t *)"Hello World", 11, 5000);
+#else
+    snprintf(str1, sizeof(str1), "Long Press");
+#endif
   }
   else
   {
-    snprintf(str1, sizeof(str1), "Long Press");
+    snprintf(str1, sizeof(str1), "Short Press");
   }
 
   snprintf(str2, sizeof(str2), "Time: %lu ms", timeout_ms);
@@ -407,7 +455,34 @@ void user_btn_callback(uint32_t timeout_ms)
   lcd_enqueue_msg(str1, str2);
 }
 
+void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == LORA_INT_Pin)
+  {
+    lora_handle_interrupt();
+  }
+}
+
+void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi, int8_t snr)
+{
+  char str1[17];
+  char str2[17];
+
+  printf("LoRa Received: %d bytes, RSSI: %d, SNR: %d\r\n", len, rssi, snr);
+
+  /* Clean the data for display */
+  char display_buf[13] = {0};
+  uint8_t copy_len = (len > 12) ? 12 : len;
+  memcpy(display_buf, data, copy_len);
+
+  snprintf(str1, sizeof(str1), "RX: %s", display_buf);
+  snprintf(str2, sizeof(str2), "R:%d S:%d", rssi, snr);
+
+  lcd_enqueue_msg(str1, str2);
+}
+
 /* USER CODE END 4 */
+
 
 /**
   * @brief  Period elapsed callback in non blocking mode
