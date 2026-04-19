@@ -32,7 +32,7 @@ extern "C" {
 #define LORA_MODE_RX 1
 
 /* Set the board mode here: LORA_MODE_TX or LORA_MODE_RX */
-#define LORA_BOARD_MODE LORA_MODE_RX
+#define LORA_BOARD_MODE LORA_MODE_TX
 
 /* --- PUBLIC TYPES ------------------------------------------------------------ */
 

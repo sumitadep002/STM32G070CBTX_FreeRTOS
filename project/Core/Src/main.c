@@ -58,6 +58,8 @@ UART_HandleTypeDef huart1;
 /* USER CODE BEGIN PV */
 uint32_t tx_count = 0;
 uint32_t rx_count = 0;
+int16_t last_rssi = 0;
+int8_t last_snr = 0;
 osThreadId_t app_task_handle = NULL;
 /* USER CODE END PV */
 
@@ -446,6 +448,8 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
   char str2[17];
 
   rx_count++;
+  last_rssi = rssi;
+  last_snr = snr;
   LORA_LOG_INFO("LoRa RX #%lu: %d bytes, RSSI: %d, SNR: %d\r\n", rx_count, len,
                 rssi, snr);
 
@@ -459,9 +463,17 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
   if (app_task_handle != NULL) {
     osThreadFlagsSet(app_task_handle, APP_EVT_ACK);
   }
-  snprintf(str1, sizeof(str1), "TX Pkt: %lu", tx_count);
-  snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
 #endif
+
+  char msg_snippet[8];
+  uint16_t copy_len = (len > 7) ? 7 : len;
+  memcpy(msg_snippet, data, copy_len);
+  msg_snippet[copy_len] = '\0';
+
+  /* Line 1: R: <RX> T: <TX> <Payload> */
+  snprintf(str1, sizeof(str1), "R:%lu T:%lu %s", rx_count, tx_count, msg_snippet);
+  /* Line 2: RSSI: <RSSI> S: <SNR> */
+  snprintf(str2, sizeof(str2), "RSSI:%d S:%d", rssi, snr);
 
   lcd_enqueue_msg(str1, str2);
 }
@@ -476,13 +488,16 @@ void app_task(void *argument) {
 
   while (tx_count < LORA_TOTAL_PACKETS) {
     tx_count++;
-    snprintf(str1, sizeof(str1), "TX Pkt: %lu", tx_count);
-    snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
+    snprintf(str1, sizeof(str1), "R:%lu T:%lu ...", rx_count, tx_count);
+    snprintf(str2, sizeof(str2), "RSSI:%d S:%d", last_rssi, last_snr);
     lcd_enqueue_msg(str1, str2);
 
     LORA_LOG_INFO("Transmitting packet %lu/%d\r\n", tx_count,
                   LORA_TOTAL_PACKETS);
-    lora_transmit((uint8_t *)"PING", 4, LORA_TX_TIMEOUT);
+    char payload[16];
+    snprintf(payload, sizeof(payload), "%lu", tx_count);
+
+    lora_transmit((uint8_t *)payload, strlen(payload), LORA_TX_TIMEOUT);
 
     /* Re-arm RX to listen for ACK */
     lora_start_rx(LORA_RX_TIMEOUT);
@@ -494,12 +509,10 @@ void app_task(void *argument) {
   osDelay(3000);
 
   LORA_LOG_INFO("App Task: TX Test Completed\r\n");
-  lcd_enqueue_msg("TX Test", "Completed");
 
   for (;;) {
     osDelay(1000);
   }
-
 #else
   LORA_LOG_INFO("App Task: RX Mode Started\r\n");
   for (;;) {
@@ -508,14 +521,18 @@ void app_task(void *argument) {
 
     tx_count++;
     LORA_LOG_INFO("Sending ACK #%lu\r\n", tx_count);
-    lora_transmit((uint8_t *)"ACK", 3, LORA_TX_TIMEOUT);
+
+    snprintf(str1, sizeof(str1), "R:%lu T:%lu ...", rx_count, tx_count);
+    snprintf(str2, sizeof(str2), "RSSI:%d S:%d", last_rssi, last_snr);
+    lcd_enqueue_msg(str1, str2);
+
+    char payload[16];
+    snprintf(payload, sizeof(payload), "%lu", tx_count);
+
+    lora_transmit((uint8_t *)payload, strlen(payload), LORA_TX_TIMEOUT);
 
     /* Re-arm RX to listen for next PING */
     lora_start_rx(LORA_RX_TIMEOUT);
-
-    snprintf(str1, sizeof(str1), "RX Pkt: %lu", rx_count);
-    snprintf(str2, sizeof(str2), "TX Ack: %lu", tx_count);
-    lcd_enqueue_msg(str1, str2);
   }
 #endif
 }
