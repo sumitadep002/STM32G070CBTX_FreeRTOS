@@ -52,7 +52,7 @@ extern "C"
 
 /* LoRa Modulation Configuration -------------------------------------------------*/
 #define LORA_MOD_PARAMS_BW SX126X_LORA_BW_125 // Bandwidth
-#define LORA_MOD_PARAMS_SF SX126X_LORA_SF8    // Spreading Factor
+#define LORA_MOD_PARAMS_SF SX126X_LORA_SF7    // Spreading Factor
 #define LORA_MOD_PARAMS_CR SX126X_LORA_CR_4_8 // Coding Rate
 #define LORA_MOD_PARAMS_LDRO 0                // Low Data Rate Optimization
 
@@ -72,8 +72,12 @@ extern "C"
 
 /* RX Configuration -------------------------------------------------*/
 #define LORA_RX_BOOSTED true // RX Boosted
+#define LORA_RX_TIMEOUT 10000 // RX Timeout in ms
+#define LORA_TX_TIMEOUT 5000 // TX Timeout in ms
+#define LORA_ACK_TIMEOUT 3000 // ACK Wait Timeout in ms
 
 #define LORA_CHANNEL_CLEAR_ATTEMPTS 10 // Channel Clear Attempts
+#define LORA_TOTAL_PACKETS 100          // Total packets to transmit in test
 
 #ifdef __cplusplus
 }

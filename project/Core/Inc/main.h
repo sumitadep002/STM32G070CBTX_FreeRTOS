@@ -57,10 +57,6 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LORA_TXEN_Pin GPIO_PIN_14
-#define LORA_TXEN_GPIO_Port GPIOC
-#define LORA_RXEN_Pin GPIO_PIN_15
-#define LORA_RXEN_GPIO_Port GPIOC
 #define GATED_5V_Pin GPIO_PIN_4
 #define GATED_5V_GPIO_Port GPIOA
 #define CFG_SW_Pin GPIO_PIN_8

@@ -69,9 +69,8 @@
  * --- PUBLIC FUNCTIONS DEFINITION ---------------------------------------------
  */
 
-const char* sx126x_driver_version_get_version_string( void )
-{
-    return ( const char* ) SX126X_DRIVER_VERSION;
+const char *sx126x_driver_version_get_version_string(void) {
+  return (const char *)SX126X_DRIVER_VERSION;
 }
 
 /*

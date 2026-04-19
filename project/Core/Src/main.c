@@ -24,12 +24,13 @@
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "../../cfg_btn/cfg_btn.h"
 #include "../../lcd/lcd.h"
 #include "../../lora/lora.h"
+#include "../../lora/lora_config.h"
 /* USER CODE END Includes */
-
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
@@ -38,7 +39,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define APP_EVT_ACK (1 << 0)
+#define APP_EVT_SEND_ACK (1 << 1)
+#define APP_EVT_START_TX (1 << 2)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,7 +57,12 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+uint32_t tx_count = 0;
+uint32_t rx_count = 0;
+int16_t last_rssi = 0;
+int8_t last_snr = 0;
+char last_payload[17] = "...";
+osThreadId_t app_task_handle = NULL;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,7 +73,9 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 void user_btn_callback(uint32_t timeout_ms);
-void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi, int8_t snr);
+void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
+                           int8_t snr);
+void app_task(void *argument);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -74,11 +84,10 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi, int8_t snr
 /* USER CODE END 0 */
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
+ * @brief  The application entry point.
+ * @retval int
+ */
+int main(void) {
 
   /* USER CODE BEGIN 1 */
 
@@ -86,7 +95,8 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
+   */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -106,7 +116,10 @@ int main(void)
   MX_I2C1_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(GATED_5V_GPIO_Port, GATED_5V_Pin, GPIO_PIN_RESET); // This will enable Gated 5V power to LCD and other peripherals. Keep it off until we are ready to use them
+  HAL_GPIO_WritePin(GATED_5V_GPIO_Port, GATED_5V_Pin,
+                    GPIO_PIN_RESET); // This will enable Gated 5V power to LCD
+                                     // and other peripherals. Keep it off until
+                                     // we are ready to use them
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -132,9 +145,14 @@ int main(void)
   cfg_btn_init(user_btn_callback);
   lcd_init();
   lora_init(user_lora_rx_callback);
+
+  const osThreadAttr_t app_task_attributes = {
+      .name = "appTask",
+      .stack_size = 256 * 4,
+      .priority = (osPriority_t)osPriorityNormal,
+  };
+  app_task_handle = osThreadNew(app_task, NULL, &app_task_attributes);
   /* USER CODE END RTOS_THREADS */
-
-
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
@@ -147,8 +165,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  while (1) {
 
     /* USER CODE END WHILE */
 
@@ -158,21 +175,20 @@ int main(void)
 }
 
 /**
-  * @brief System Clock Configuration
-  * @retval None
-  */
-void SystemClock_Config(void)
-{
+ * @brief System Clock Configuration
+ * @retval None
+ */
+void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
-  */
+   */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+   * in the RCC_OscInitTypeDef structure.
+   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
@@ -183,32 +199,29 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLN = 8;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1;
+   */
+  RCC_ClkInitStruct.ClockType =
+      RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
     Error_Handler();
   }
 }
 
 /**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
+ * @brief I2C1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_I2C1_Init(void) {
 
   /* USER CODE BEGIN I2C1_Init 0 */
 
@@ -226,37 +239,32 @@ static void MX_I2C1_Init(void)
   hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
   hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
   hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK) {
     Error_Handler();
   }
 
   /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
+   */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK) {
     Error_Handler();
   }
 
   /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
+   */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK) {
     Error_Handler();
   }
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
-
 }
 
 /**
-  * @brief SPI1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI1_Init(void)
-{
+ * @brief SPI1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_SPI1_Init(void) {
 
   /* USER CODE BEGIN SPI1_Init 0 */
 
@@ -280,23 +288,20 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CRCPolynomial = 7;
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
   hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
-  if (HAL_SPI_Init(&hspi1) != HAL_OK)
-  {
+  if (HAL_SPI_Init(&hspi1) != HAL_OK) {
     Error_Handler();
   }
   /* USER CODE BEGIN SPI1_Init 2 */
 
   /* USER CODE END SPI1_Init 2 */
-
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
+ * @brief USART1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_USART1_UART_Init(void) {
 
   /* USER CODE BEGIN USART1_Init 0 */
 
@@ -316,63 +321,48 @@ static void MX_USART1_UART_Init(void)
   huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
   huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
   huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
+  if (HAL_UART_Init(&huart1) != HAL_OK) {
     Error_Handler();
   }
-  if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) !=
+      HAL_OK) {
     Error_Handler();
   }
-  if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) !=
+      HAL_OK) {
     Error_Handler();
   }
-  if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK)
-  {
+  if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK) {
     Error_Handler();
   }
   /* USER CODE BEGIN USART1_Init 2 */
 
   /* USER CODE END USART1_Init 2 */
-
 }
 
 /**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_GPIO_Init(void)
-{
+ * @brief GPIO Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_GPIO_Init(void) {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, LORA_TXEN_Pin|LORA_RXEN_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GATED_5V_Pin|LORA_NSS_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GATED_5V_Pin | LORA_NSS_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LORA_RST_GPIO_Port, LORA_RST_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : LORA_TXEN_Pin LORA_RXEN_Pin */
-  GPIO_InitStruct.Pin = LORA_TXEN_Pin|LORA_RXEN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
   /*Configure GPIO pins : GATED_5V_Pin LORA_NSS_Pin */
-  GPIO_InitStruct.Pin = GATED_5V_Pin|LORA_NSS_Pin;
+  GPIO_InitStruct.Pin = GATED_5V_Pin | LORA_NSS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -410,43 +400,38 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI4_15_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-int _write(int file, char *ptr, int len)
-{
+int _write(int file, char *ptr, int len) {
   HAL_UART_Transmit(&huart1, (uint8_t *)ptr, len, HAL_MAX_DELAY);
   return len;
 }
 
-void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == CFG_SW_Pin)
-  {
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin) {
+  if (GPIO_Pin == CFG_SW_Pin) {
     cfg_btn_handle_interrupt();
   }
 }
 
-void user_btn_callback(uint32_t timeout_ms)
-{
+void user_btn_callback(uint32_t timeout_ms) {
   char str1[17];
   char str2[17];
 
   printf("Button callback triggered: %lu ms\r\n", timeout_ms);
 
-  if (timeout_ms >= 1000)
-  {
+  if (timeout_ms >= 1000) {
 #if (LORA_BOARD_MODE == LORA_MODE_TX)
-    snprintf(str1, sizeof(str1), "LoRa Transmit");
-    lora_transmit((uint8_t *)"Hello World", 11, 5000);
+    snprintf(str1, sizeof(str1), "Starting Test");
+    if (app_task_handle != NULL) {
+      osThreadFlagsSet(app_task_handle, APP_EVT_START_TX);
+    }
 #else
     snprintf(str1, sizeof(str1), "Long Press");
 #endif
-  }
-  else
-  {
+  } else {
     snprintf(str1, sizeof(str1), "Short Press");
   }
 
@@ -455,45 +440,128 @@ void user_btn_callback(uint32_t timeout_ms)
   lcd_enqueue_msg(str1, str2);
 }
 
-void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == LORA_INT_Pin)
-  {
+void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
+  if (GPIO_Pin == LORA_INT_Pin) {
     lora_handle_interrupt();
   }
 }
 
-void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi, int8_t snr)
-{
+void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
+                           int8_t snr) {
   char str1[17];
   char str2[17];
 
-  printf("LoRa Received: %d bytes, RSSI: %d, SNR: %d\r\n", len, rssi, snr);
+  rx_count++;
+  last_rssi = rssi;
+  last_snr = snr;
 
-  /* Clean the data for display */
-  char display_buf[13] = {0};
-  uint8_t copy_len = (len > 12) ? 12 : len;
-  memcpy(display_buf, data, copy_len);
+  uint16_t payload_len = (len > 16) ? 16 : len;
+  memcpy(last_payload, data, payload_len);
+  last_payload[payload_len] = '\0';
 
-  snprintf(str1, sizeof(str1), "RX: %s", display_buf);
-  snprintf(str2, sizeof(str2), "R:%d S:%d", rssi, snr);
+  LORA_LOG_INFO("LoRa RX #%lu: %d bytes, RSSI: %d, SNR: %d\r\n", rx_count, len,
+                rssi, snr);
+
+#if (LORA_BOARD_MODE == LORA_MODE_RX)
+  /* Signal app_task to send ACK (avoids deadlock in lora_task) */
+  if (app_task_handle != NULL) {
+    osThreadFlagsSet(app_task_handle, APP_EVT_SEND_ACK);
+  }
+#else
+  /* TX Board received ACK */
+  if (app_task_handle != NULL) {
+    osThreadFlagsSet(app_task_handle, APP_EVT_ACK);
+  }
+#endif
+
+  char msg_snippet[8];
+  uint16_t copy_len = (len > 7) ? 7 : len;
+  memcpy(msg_snippet, data, copy_len);
+  msg_snippet[copy_len] = '\0';
+
+  /* Line 1: R: <RX> T: <TX> <Payload> */
+  snprintf(str1, sizeof(str1), "R:%lu T:%lu %s", rx_count, tx_count, msg_snippet);
+  /* Line 2: RSSI: <RSSI> S: <SNR> */
+  snprintf(str2, sizeof(str2), "RSSI:%d S:%d", rssi, snr);
 
   lcd_enqueue_msg(str1, str2);
 }
 
+void app_task(void *argument) {
+  char str1[17];
+  char str2[17];
+
+#if (LORA_BOARD_MODE == LORA_MODE_TX)
+  LORA_LOG_INFO("App Task: TX Mode Waiting for Trigger...\r\n");
+  lcd_enqueue_msg("TX READY", "Long Press START");
+
+  /* Wait for 1000ms button press trigger */
+  osThreadFlagsWait(APP_EVT_START_TX, osFlagsWaitAny, osWaitForever);
+
+  LORA_LOG_INFO("App Task: TX Mode Started\r\n");
+
+  while (tx_count < LORA_TOTAL_PACKETS) {
+    tx_count++;
+    snprintf(str1, sizeof(str1), "R:%lu T:%lu %s", rx_count, tx_count, last_payload);
+    snprintf(str2, sizeof(str2), "RSSI:%d S:%d", last_rssi, last_snr);
+    lcd_enqueue_msg(str1, str2);
+
+    LORA_LOG_INFO("Transmitting packet %lu/%d\r\n", tx_count,
+                  LORA_TOTAL_PACKETS);
+    char payload[16];
+    snprintf(payload, sizeof(payload), "%lu", tx_count);
+
+    lora_transmit((uint8_t *)payload, strlen(payload), LORA_TX_TIMEOUT);
+
+    /* Re-arm RX to listen for ACK */
+    lora_start_rx(LORA_RX_TIMEOUT);
+
+    /* Wait for ACK or Timeout */
+    osThreadFlagsWait(APP_EVT_ACK, osFlagsWaitAny, LORA_ACK_TIMEOUT);
+  }
+
+  osDelay(3000);
+
+  LORA_LOG_INFO("App Task: TX Test Completed\r\n");
+
+  for (;;) {
+    osDelay(1000);
+  }
+#else
+  LORA_LOG_INFO("App Task: RX Mode Started\r\n");
+  for (;;) {
+    /* Wait for signal from RX callback to send ACK */
+    osThreadFlagsWait(APP_EVT_SEND_ACK, osFlagsWaitAny, osWaitForever);
+
+    tx_count++;
+    LORA_LOG_INFO("Sending ACK #%lu\r\n", tx_count);
+
+    snprintf(str1, sizeof(str1), "R:%lu T:%lu %s", rx_count, tx_count, last_payload);
+    snprintf(str2, sizeof(str2), "RSSI:%d S:%d", last_rssi, last_snr);
+    lcd_enqueue_msg(str1, str2);
+
+    char payload[16];
+    snprintf(payload, sizeof(payload), "%lu", tx_count);
+
+    lora_transmit((uint8_t *)payload, strlen(payload), LORA_TX_TIMEOUT);
+
+    /* Re-arm RX to listen for next PING */
+    lora_start_rx(LORA_RX_TIMEOUT);
+  }
+#endif
+}
+
 /* USER CODE END 4 */
 
-
 /**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM6 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
+ * @brief  Period elapsed callback in non blocking mode
+ * @note   This function is called  when TIM6 interrupt took place, inside
+ * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+ * a global variable "uwTick" used as application time base.
+ * @param  htim : TIM handle
+ * @retval None
+ */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   /* USER CODE BEGIN Callback 0 */
 
   /* USER CODE END Callback 0 */
@@ -506,33 +574,31 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 }
 
 /**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
+ * @brief  This function is executed in case of error occurrence.
+ * @retval None
+ */
+void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
+  while (1) {
   }
   /* USER CODE END Error_Handler_Debug */
 }
 
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
+ * @brief  Reports the name of the source file and the source line number
+ *         where the assert_param error has occurred.
+ * @param  file: pointer to the source file name
+ * @param  line: assert_param error line source number
+ * @retval None
+ */
+void assert_failed(uint8_t *file, uint32_t line) {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* User can add his own implementation to report the file name and line
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
+     line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
