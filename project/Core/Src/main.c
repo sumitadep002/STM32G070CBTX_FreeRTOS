@@ -29,6 +29,7 @@
 #include "../../cfg_btn/cfg_btn.h"
 #include "../../lcd/lcd.h"
 #include "../../lora/lora.h"
+#include "../../lora/lora_config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -38,7 +39,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define APP_EVT_ACK (1 << 0)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -451,12 +452,16 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
   /* RX Board sends ACK */
   tx_count++;
   LORA_LOG_INFO("Sending ACK #%lu\r\n", tx_count);
-  lora_transmit((uint8_t *)"ACK", 3, 5000);
+  osDelay(50);
+  lora_transmit((uint8_t *)"ACK", 3, LORA_TX_TIMEOUT);
 
   snprintf(str1, sizeof(str1), "RX Pkt: %lu", rx_count);
   snprintf(str2, sizeof(str2), "TX Ack: %lu", tx_count);
 #else
   /* TX Board received ACK */
+  if (app_task_handle != NULL) {
+    osThreadFlagsSet(app_task_handle, APP_EVT_ACK);
+  }
   snprintf(str1, sizeof(str1), "TX Pkt: %lu", tx_count);
   snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
 #endif
@@ -480,10 +485,14 @@ void app_task(void *argument) {
 
     LORA_LOG_INFO("Transmitting packet %lu/%d\r\n", tx_count,
                   LORA_TOTAL_PACKETS);
-    lora_transmit((uint8_t *)"PING", 4, 5000);
+    osDelay(50);
+    lora_transmit((uint8_t *)"PING", 4, LORA_TX_TIMEOUT);
 
-    /* Wait for ACK window + margin */
-    osDelay(6000);
+    /* Re-arm RX to listen for ACK */
+    lora_start_rx(LORA_RX_TIMEOUT);
+
+    /* Wait for ACK or Timeout */
+    osThreadFlagsWait(APP_EVT_ACK, osFlagsWaitAny, LORA_ACK_TIMEOUT);
   }
 
   LORA_LOG_INFO("App Task: TX Test Completed\r\n");
