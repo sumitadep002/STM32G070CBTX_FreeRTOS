@@ -54,7 +54,9 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-
+uint32_t tx_count = 0;
+uint32_t rx_count = 0;
+osThreadId_t app_task_handle = NULL;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,6 +69,7 @@ static void MX_SPI1_Init(void);
 void user_btn_callback(uint32_t timeout_ms);
 void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
                            int8_t snr);
+void app_task(void *argument);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -136,6 +139,13 @@ int main(void) {
   cfg_btn_init(user_btn_callback);
   lcd_init();
   lora_init(user_lora_rx_callback);
+
+  const osThreadAttr_t app_task_attributes = {
+      .name = "appTask",
+      .stack_size = 256 * 4,
+      .priority = (osPriority_t)osPriorityNormal,
+  };
+  app_task_handle = osThreadNew(app_task, NULL, &app_task_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -433,17 +443,59 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
   char str1[17];
   char str2[17];
 
-  printf("LoRa Received: %d bytes, RSSI: %d, SNR: %d\r\n", len, rssi, snr);
+  rx_count++;
+  LORA_LOG_INFO("LoRa RX #%lu: %d bytes, RSSI: %d, SNR: %d\r\n", rx_count, len,
+                rssi, snr);
 
-  /* Clean the data for display */
-  char display_buf[13] = {0};
-  uint8_t copy_len = (len > 12) ? 12 : len;
-  memcpy(display_buf, data, copy_len);
+#if (LORA_BOARD_MODE == LORA_MODE_RX)
+  /* RX Board sends ACK */
+  tx_count++;
+  LORA_LOG_INFO("Sending ACK #%lu\r\n", tx_count);
+  lora_transmit((uint8_t *)"ACK", 3, 5000);
 
-  snprintf(str1, sizeof(str1), "RX: %s", display_buf);
-  snprintf(str2, sizeof(str2), "R:%d S:%d", rssi, snr);
+  snprintf(str1, sizeof(str1), "RX Pkt: %lu", rx_count);
+  snprintf(str2, sizeof(str2), "TX Ack: %lu", tx_count);
+#else
+  /* TX Board received ACK */
+  snprintf(str1, sizeof(str1), "TX Pkt: %lu", tx_count);
+  snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
+#endif
 
   lcd_enqueue_msg(str1, str2);
+}
+
+void app_task(void *argument) {
+  char str1[17];
+  char str2[17];
+
+#if (LORA_BOARD_MODE == LORA_MODE_TX)
+  LORA_LOG_INFO("App Task: TX Mode Started\r\n");
+  osDelay(5000); /* Wait for system to settle */
+
+  while (tx_count < LORA_TOTAL_PACKETS) {
+    tx_count++;
+    snprintf(str1, sizeof(str1), "TX Pkt: %lu", tx_count);
+    snprintf(str2, sizeof(str2), "RX Ack: %lu", rx_count);
+    lcd_enqueue_msg(str1, str2);
+
+    LORA_LOG_INFO("Transmitting packet %lu/%d\r\n", tx_count,
+                  LORA_TOTAL_PACKETS);
+    lora_transmit((uint8_t *)"PING", 4, 5000);
+
+    /* Wait for ACK window + margin */
+    osDelay(6000);
+  }
+
+  LORA_LOG_INFO("App Task: TX Test Completed\r\n");
+  lcd_enqueue_msg("TX Test", "Completed");
+
+#else
+  LORA_LOG_INFO("App Task: RX Mode Started\r\n");
+  /* RX Board just waits for interrupts, counters are updated in callback */
+  for (;;) {
+    osDelay(1000);
+  }
+#endif
 }
 
 /* USER CODE END 4 */
