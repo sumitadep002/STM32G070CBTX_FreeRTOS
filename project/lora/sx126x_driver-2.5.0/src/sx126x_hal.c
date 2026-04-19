@@ -136,6 +136,22 @@ sx126x_hal_status_t sx126x_hal_init( const void* context )
     return SX126X_HAL_STATUS_OK;
 }
 
+sx126x_hal_status_t sx126x_hal_set_rf_switch_mode( const void* context, sx126x_hal_rf_switch_mode_t mode )
+{
+    if( mode == SX126X_HAL_RF_SWITCH_TX )
+    {
+        HAL_GPIO_WritePin( LORA_TXEN_GPIO_Port, LORA_TXEN_Pin, GPIO_PIN_SET );
+        HAL_GPIO_WritePin( LORA_RXEN_GPIO_Port, LORA_RXEN_Pin, GPIO_PIN_RESET );
+    }
+    else
+    {
+        HAL_GPIO_WritePin( LORA_TXEN_GPIO_Port, LORA_TXEN_Pin, GPIO_PIN_RESET );
+        HAL_GPIO_WritePin( LORA_RXEN_GPIO_Port, LORA_RXEN_Pin, GPIO_PIN_SET );
+    }
+
+    return SX126X_HAL_STATUS_OK;
+}
+
 
 /*
  * -----------------------------------------------------------------------------

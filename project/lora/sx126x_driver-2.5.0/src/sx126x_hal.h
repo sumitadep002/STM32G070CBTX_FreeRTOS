@@ -143,6 +143,22 @@ sx126x_hal_status_t sx126x_hal_wakeup( const void* context );
  */
 sx126x_hal_status_t sx126x_hal_init( const void* context );
 
+typedef enum sx126x_hal_rf_switch_mode_e
+{
+    SX126X_HAL_RF_SWITCH_RX = 0,
+    SX126X_HAL_RF_SWITCH_TX = 1,
+} sx126x_hal_rf_switch_mode_t;
+
+/**
+ * Set the RF switch mode
+ *
+ * @param [in] context Radio implementation parameters
+ * @param [in] mode    RF switch mode (RX or TX)
+ *
+ * @returns Operation status
+ */
+sx126x_hal_status_t sx126x_hal_set_rf_switch_mode( const void* context, sx126x_hal_rf_switch_mode_t mode );
+
 #ifdef __cplusplus
 }
 #endif

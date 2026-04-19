@@ -39,7 +39,7 @@ extern "C"
 
 /* RF Switch Control Configuration -------------------------------------------------*/
 // Set the RF switch control pins through DIO2
-#define LORA_DIO2_RF_SW_CTRL 1 // Enable (1) or Disable (0)
+#define LORA_DIO2_RF_SW_CTRL 0 // Enable (1) or Disable (0)
 
 /* Packet Configuration -------------------------------------------------*/
 #define LORA_PKT_TYPE SX126X_PKT_TYPE_LORA // Packet Type
