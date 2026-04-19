@@ -41,6 +41,7 @@
 /* USER CODE BEGIN PD */
 #define APP_EVT_ACK (1 << 0)
 #define APP_EVT_SEND_ACK (1 << 1)
+#define APP_EVT_START_TX (1 << 2)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,6 +61,7 @@ uint32_t tx_count = 0;
 uint32_t rx_count = 0;
 int16_t last_rssi = 0;
 int8_t last_snr = 0;
+char last_payload[17] = "...";
 osThreadId_t app_task_handle = NULL;
 /* USER CODE END PV */
 
@@ -422,8 +424,10 @@ void user_btn_callback(uint32_t timeout_ms) {
 
   if (timeout_ms >= 1000) {
 #if (LORA_BOARD_MODE == LORA_MODE_TX)
-    snprintf(str1, sizeof(str1), "LoRa Transmit");
-    lora_transmit((uint8_t *)"Hello World", 11, 5000);
+    snprintf(str1, sizeof(str1), "Starting Test");
+    if (app_task_handle != NULL) {
+      osThreadFlagsSet(app_task_handle, APP_EVT_START_TX);
+    }
 #else
     snprintf(str1, sizeof(str1), "Long Press");
 #endif
@@ -450,6 +454,11 @@ void user_lora_rx_callback(uint8_t *data, uint16_t len, int16_t rssi,
   rx_count++;
   last_rssi = rssi;
   last_snr = snr;
+
+  uint16_t payload_len = (len > 16) ? 16 : len;
+  memcpy(last_payload, data, payload_len);
+  last_payload[payload_len] = '\0';
+
   LORA_LOG_INFO("LoRa RX #%lu: %d bytes, RSSI: %d, SNR: %d\r\n", rx_count, len,
                 rssi, snr);
 
@@ -483,12 +492,17 @@ void app_task(void *argument) {
   char str2[17];
 
 #if (LORA_BOARD_MODE == LORA_MODE_TX)
+  LORA_LOG_INFO("App Task: TX Mode Waiting for Trigger...\r\n");
+  lcd_enqueue_msg("TX READY", "Long Press START");
+
+  /* Wait for 1000ms button press trigger */
+  osThreadFlagsWait(APP_EVT_START_TX, osFlagsWaitAny, osWaitForever);
+
   LORA_LOG_INFO("App Task: TX Mode Started\r\n");
-  osDelay(5000); /* Wait for system to settle */
 
   while (tx_count < LORA_TOTAL_PACKETS) {
     tx_count++;
-    snprintf(str1, sizeof(str1), "R:%lu T:%lu ...", rx_count, tx_count);
+    snprintf(str1, sizeof(str1), "R:%lu T:%lu %s", rx_count, tx_count, last_payload);
     snprintf(str2, sizeof(str2), "RSSI:%d S:%d", last_rssi, last_snr);
     lcd_enqueue_msg(str1, str2);
 
@@ -522,7 +536,7 @@ void app_task(void *argument) {
     tx_count++;
     LORA_LOG_INFO("Sending ACK #%lu\r\n", tx_count);
 
-    snprintf(str1, sizeof(str1), "R:%lu T:%lu ...", rx_count, tx_count);
+    snprintf(str1, sizeof(str1), "R:%lu T:%lu %s", rx_count, tx_count, last_payload);
     snprintf(str2, sizeof(str2), "RSSI:%d S:%d", last_rssi, last_snr);
     lcd_enqueue_msg(str1, str2);
 
