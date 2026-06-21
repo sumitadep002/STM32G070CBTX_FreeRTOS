@@ -30,7 +30,7 @@ Detailed tracking of the validation setup can be found in the [Closed Issues](ht
 
 ---
 
-## FreeRTOS Implementation Efforts
+## FreeRTOS Implementation
 The application relies on a preemptive FreeRTOS multitasking design optimized to keep the RF transceiver operating with minimal latency:
 
 - **Producer-Consumer Thread Topology**: High-priority interrupt handlers act as event producers, capturing time-sensitive radio states and immediate user inputs. These events are dispatched via non-blocking queues to lower-priority processing tasks.
